@@ -38,9 +38,17 @@ from get_python_datasets import get_python_datasets
 from get_py2dataset_params import get_questions, get_model, get_output_dir
 from save_py2dataset_output import combine_json_files, save_python_data
 
-def process_single_file(pythonfile_path: str, start_dir: str, model_config_pathname: str,
-                        questions: Dict, use_llm: bool, output_dir: str,
-                        model_config: Dict = None, single_process: bool = False) -> None:
+
+def process_single_file(
+    pythonfile_path: str,
+    start_dir: str,
+    model_config_pathname: str,
+    questions: Dict,
+    use_llm: bool,
+    output_dir: str,
+    model_config: Dict = None,
+    single_process: bool = False,
+) -> None:
     """
     Process a single Python file to generate question-answer pairs and instructions.
     Args:
@@ -55,14 +63,14 @@ def process_single_file(pythonfile_path: str, start_dir: str, model_config_pathn
     Returns:
         none
     """
-    logging.info(f'Processing: {pythonfile_path}')
+    logging.info(f"Processing: {pythonfile_path}")
     relative_path = pythonfile_path.relative_to(start_dir)
-    base_name = '.'.join(part for part in relative_path.parts)
+    base_name = ".".join(part for part in relative_path.parts)
 
     if not single_process:
         # Instantiate llm and prompt if use_llm is True for each file to avoid
         # multiprocessing pickling problem
-        model_config = get_model(model_config_pathname) if use_llm else (None, '', 0)
+        model_config = get_model(model_config_pathname) if use_llm else (None, "", 0)
 
     # Use AST to get python file details
     file_details = get_python_file_details(pythonfile_path)
@@ -71,20 +79,23 @@ def process_single_file(pythonfile_path: str, start_dir: str, model_config_pathn
 
     # Get lists for instruct.json for python file
     instruct_list = get_python_datasets(
-        pythonfile_path,
-        file_details,
-        base_name,
-        questions,
-        model_config
-        )
+        pythonfile_path, file_details, base_name, questions, model_config, use_llm
+    )
     if instruct_list is None:
         return
 
     save_python_data(file_details, instruct_list, relative_path, output_dir)
 
-def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: str = '',
-               model_config_pathname: str = '', use_llm: bool = False, quiet: bool = False,
-               single_process: bool = False) -> Dict[str, List[Dict]]:
+
+def py2dataset(
+    start_dir: str = "",
+    output_dir: str = "",
+    questions_pathname: str = "",
+    model_config_pathname: str = "",
+    use_llm: bool = False,
+    quiet: bool = False,
+    single_process: bool = False,
+) -> Dict[str, List[Dict]]:
     """
     Process Python files to generate question-answer pairs and instructions.
     Args:
@@ -97,7 +108,7 @@ def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: st
         use_llm (bool, optional): If True, use a Large Language Model
         for generating JSON answers. Defaults to False.
         quiet (bool, optional): Limit logging output. Defaults to False.
-        single_process(bool, optional): If True, only a single process 
+        single_process(bool, optional): If True, only a single process
         will be used to process Python files. Defaults to False. Set to True to
         instantiate LLM once before processing all files.
     Returns:
@@ -111,7 +122,7 @@ def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: st
 
     # If start dir is empty or not a valid directory, use current working directory
     if not start_dir:
-        logging.info('No valid start path provided. Using current working directory.')
+        logging.info("No valid start path provided. Using current working directory.")
         start_dir = os.getcwd()
     start_dir = os.path.abspath(start_dir)
     output_dir = get_output_dir(output_dir)
@@ -119,9 +130,9 @@ def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: st
 
     # If single_process is True, load model config here
     if single_process:
-        model_config = get_model(model_config_pathname) if use_llm else (None, '', 0)
+        model_config = get_model(model_config_pathname) if use_llm else (None, "", 0)
 
-    for pythonfile_path in Path(start_dir).rglob('[!_]*.py'):
+    for pythonfile_path in Path(start_dir).rglob("[!_]*.py"):
         if pythonfile_path.is_dir():
             continue
         if single_process:
@@ -133,7 +144,8 @@ def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: st
                 use_llm,
                 output_dir,
                 model_config,
-                single_process)
+                single_process,
+            )
             continue
         # Spawn a new child process to manage python memory leaks
         proc = Process(
@@ -144,8 +156,9 @@ def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: st
                 model_config_pathname,
                 questions,
                 use_llm,
-                output_dir)
-            )
+                output_dir,
+            ),
+        )
         proc.start()
         proc.join()
 
@@ -153,40 +166,47 @@ def py2dataset(start_dir: str = '', output_dir: str = '', questions_pathname: st
     datasets = combine_json_files(output_dir)
     return datasets
 
+
 def main():
     """
     Command-line entry point for processing Python files and generating datasets.
     """
-    arg_string = ' '.join(sys.argv[1:])
-    start_dir = ''
-    output_dir = ''
-    questions_pathname = ''
-    model_config_pathname = ''
+    arg_string = " ".join(sys.argv[1:])
+    start_dir = ""
+    output_dir = ""
+    questions_pathname = ""
+    model_config_pathname = ""
     use_llm = False
     quiet = False
     single_process = False
 
-    if '--start_dir' in arg_string:
-        start_dir = arg_string.split('--start_dir ')[1].split(' ')[0]
-        arg_string = arg_string.replace(f'--start_dir {start_dir}', '')
-    if '--output_dir' in arg_string:
-        output_dir = arg_string.split('--output_dir ')[1].split(' ')[0]
-        arg_string = arg_string.replace(f'--output_dir {output_dir}', '')
-    if '--model_config_pathname' in arg_string:
-        model_config_pathname = arg_string.split('--model_config_pathname ')[1].split(' ')[0]
-        arg_string = arg_string.replace(f'--model_config_pathname {model_config_pathname}', '')
-    if '--questions_pathname' in arg_string:
-        questions_pathname = arg_string.split('--questions_pathname ')[1].split(' ')[0]
-        arg_string = arg_string.replace(f'--questions_pathname {questions_pathname}', '')
-    if '--use_llm' in arg_string:
+    if "--start_dir" in arg_string:
+        start_dir = arg_string.split("--start_dir ")[1].split(" ")[0]
+        arg_string = arg_string.replace(f"--start_dir {start_dir}", "")
+    if "--output_dir" in arg_string:
+        output_dir = arg_string.split("--output_dir ")[1].split(" ")[0]
+        arg_string = arg_string.replace(f"--output_dir {output_dir}", "")
+    if "--model_config_pathname" in arg_string:
+        model_config_pathname = arg_string.split("--model_config_pathname ")[1].split(
+            " "
+        )[0]
+        arg_string = arg_string.replace(
+            f"--model_config_pathname {model_config_pathname}", ""
+        )
+    if "--questions_pathname" in arg_string:
+        questions_pathname = arg_string.split("--questions_pathname ")[1].split(" ")[0]
+        arg_string = arg_string.replace(
+            f"--questions_pathname {questions_pathname}", ""
+        )
+    if "--use_llm" in arg_string:
         use_llm = True
-        arg_string = arg_string.replace('--use_llm', '')
-    if '--quiet' in arg_string:
+        arg_string = arg_string.replace("--use_llm", "")
+    if "--quiet" in arg_string:
         quiet = True
-        arg_string = arg_string.replace('--quiet', '')
-    if '--single_process' in arg_string:
+        arg_string = arg_string.replace("--quiet", "")
+    if "--single_process" in arg_string:
         single_process = True
-        arg_string = arg_string.replace('--single_process', '')
+        arg_string = arg_string.replace("--single_process", "")
 
     py2dataset(
         start_dir,
@@ -195,7 +215,9 @@ def main():
         model_config_pathname,
         use_llm,
         quiet,
-        single_process)
+        single_process,
+    )
+
 
 if __name__ == "__main__":
     main()
